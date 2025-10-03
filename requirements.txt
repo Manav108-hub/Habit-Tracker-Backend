@@ -17,11 +17,11 @@ aiosqlite
 asyncpg
 alembic
 python-jose[cryptography]
-passlib[bcrypt]
+bcrypt==4.1.2
 python-multipart
 python-dotenv
 pydantic[email]
 httpx
-psycopg2
 dotenv
 google-genai
+

@@ -3,15 +3,14 @@ from datetime import datetime, timedelta
 import time
 import secrets
 import os
-from fastapi import Request, HTTPException, status, Depends
+import bcrypt
+from fastapi import Request, HTTPException, Depends
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, delete
-from sqlalchemy.orm import selectinload
+from sqlalchemy import select
 from dotenv import load_dotenv
 from database import get_db
-from model import User, Habit, HabitCheckIn, AdminInvite
+from model import User, AdminInvite
 
 load_dotenv()
 
@@ -24,14 +23,14 @@ ADMIN_CREATION_SECRET = os.getenv("ADMIN_CREATION_SECRET")
 # Rate limiting for admin operations
 admin_rate_limit = {}
 
-# Password hashing setup
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    """Hash password using bcrypt"""
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    """Verify password against hash"""
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
