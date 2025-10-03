@@ -103,16 +103,24 @@ async def create_first_admin_if_none_exist(email: str, password: str, secret: st
     return True
 
 async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)):
+    # Try cookie first (for backwards compatibility)
     token = request.cookies.get("access_token")
+    
+    # If no cookie, try Authorization header
+    if not token:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.replace("Bearer ", "")
+    
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
             raise HTTPException(status_code=401, detail="Invalid credentials")
         
-        # Get user from database
         result = await db.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
         if user is None:

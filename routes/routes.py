@@ -112,9 +112,8 @@ async def create_first_admin(
     
     return MessageResponse(message="Super admin created successfully")
 
-@router.post("/login", response_model=MessageResponse)
+@router.post("/login")
 async def login(user: UserLogin, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
-    # Get user from database
     result = await db.execute(select(User).where(User.email == user.email))
     db_user = result.scalar_one_or_none()
 
@@ -122,42 +121,29 @@ async def login(user: UserLogin, background_tasks: BackgroundTasks, db: AsyncSes
         logger.warning(f"Failed login attempt for email: {user.email}")
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    # Log successful login with role information
-    logger.info(f"✅ LOGIN SUCCESS - User: {db_user.email} | Role: {db_user.role} | ID: {db_user.id}")
+    logger.info(f"✅ LOGIN SUCCESS - User: {db_user.email} | Role: {db_user.role}")
     
-    # Special logging for admin logins
     if db_user.role in ["admin", "super_admin"]:
-        logger.warning(f"🔐 ADMIN LOGIN - {db_user.role.upper()}: {db_user.email} | ID: {db_user.id}")
+        logger.warning(f"🔐 ADMIN LOGIN - {db_user.role.upper()}: {db_user.email}")
     
     token = create_access_token(
         data={"sub": user.email}, 
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
 
-    response = JSONResponse(content={
+    background_tasks.add_task(check_daily_recommendations, db_user.id, db)
+    
+    # Return token in response body instead of cookie
+    return {
         "message": "Login successful",
+        "access_token": token,
+        "token_type": "bearer",
         "user": {
             "email": db_user.email,
             "role": db_user.role,
             "is_admin": db_user.role in ["admin", "super_admin"]
         }
-    })
-    response.set_cookie(
-        key="access_token",
-        value=token,
-        httponly=True,
-        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        expires=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        samesite="lax",
-        secure=False,
-        domain="localhost",
-        path="/"
-    )
-    
-    # Schedule daily recommendations check (NOT auto check-ins)
-    background_tasks.add_task(check_daily_recommendations, db_user.id, db)
-    
-    return response
+    }
 
 @router.post("/logout", response_model=MessageResponse)
 def logout():
