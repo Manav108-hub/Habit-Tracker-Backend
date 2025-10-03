@@ -1,7 +1,6 @@
-# auth_utils.py - Fixed version without auto check-in functionality
+# auth_utils.py - Pure Authorization header based authentication
 from datetime import datetime, timedelta
 import time
-import secrets
 import os
 import bcrypt
 from fastapi import Request, HTTPException, Depends
@@ -103,23 +102,25 @@ async def create_first_admin_if_none_exist(email: str, password: str, secret: st
     return True
 
 async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)):
-    # Try cookie first (for backwards compatibility)
-    token = request.cookies.get("access_token")
+    """Get current user from Authorization header ONLY"""
+    auth_header = request.headers.get("Authorization")
     
-    # If no cookie, try Authorization header
-    if not token:
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            token = auth_header.replace("Bearer ", "")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401, 
+            detail="Authorization header with Bearer token required"
+        )
+    
+    token = auth_header.replace("Bearer ", "").strip()
     
     if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+        raise HTTPException(status_code=401, detail="Token is empty")
     
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
-            raise HTTPException(status_code=401, detail="Invalid credentials")
+            raise HTTPException(status_code=401, detail="Invalid token payload")
         
         result = await db.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
@@ -127,16 +128,18 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
             raise HTTPException(status_code=401, detail="User not found")
         
         return user
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+    except JWTError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
 
 async def get_current_admin(request: Request, db: AsyncSession = Depends(get_db)):
+    """Get current admin user"""
     user = await get_current_user(request, db)
     if user.role not in ["admin", "super_admin"]:
-        raise HTTPException(status_code=403, detail="Not authorized as admin")
+        raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
 async def get_current_super_admin(request: Request, db: AsyncSession = Depends(get_db)):
+    """Get current super admin user"""
     user = await get_current_user(request, db)
     if user.role != "super_admin":
         raise HTTPException(status_code=403, detail="Super admin access required")
@@ -152,9 +155,3 @@ async def verify_admin_invite_token(token: str, db: AsyncSession):
         )
     )
     return result.scalar_one_or_none()
-
-
-# ✅ REMOVED: update_user_habit_checkins function
-# This function was causing automatic check-ins on every login
-# Check-ins should ONLY be created when users explicitly click "Check In" button
-# If you need streak analysis, create a separate read-only analytics function

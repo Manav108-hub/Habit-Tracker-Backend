@@ -1,4 +1,5 @@
 # routes.py - Fixed version without auto check-in
+# routes.py - Remove all cookie references
 from fastapi import APIRouter, HTTPException, Request, status, Depends, BackgroundTasks
 from fastapi.responses import JSONResponse
 from datetime import datetime, timedelta
@@ -133,7 +134,7 @@ async def login(user: UserLogin, background_tasks: BackgroundTasks, db: AsyncSes
 
     background_tasks.add_task(check_daily_recommendations, db_user.id, db)
     
-    # Return token in response body instead of cookie
+    # Return token in response body for localStorage storage
     return {
         "message": "Login successful",
         "access_token": token,
@@ -146,10 +147,48 @@ async def login(user: UserLogin, background_tasks: BackgroundTasks, db: AsyncSes
     }
 
 @router.post("/logout", response_model=MessageResponse)
-def logout():
-    response = JSONResponse(content={"message": "Logged out"})
-    response.delete_cookie("access_token")
-    return response
+async def logout():
+    """Logout - client should remove token from localStorage"""
+    return MessageResponse(message="Logged out successfully")
+
+# ... (rest of your routes remain exactly the same, they already use get_current_user which uses Authorization header)
+
+# -------------------------------
+# User Profile Route
+# -------------------------------
+
+@router.get("/me", response_model=UserResponse)
+async def get_me(current_user: User = Depends(get_current_user)):
+    return UserResponse(
+        id=current_user.id,
+        email=current_user.email,
+        role=current_user.role,
+        total_points=current_user.total_points,
+        level=current_user.level,
+        created_at=current_user.created_at
+    )
+
+# -------------------------------
+# Background Tasks
+# -------------------------------
+
+async def check_daily_recommendations(user_id: int, db: AsyncSession):
+    """Background task to generate daily recommendations if needed"""
+    today = datetime.utcnow().date()
+    
+    # Check if user already has recommendations for today
+    result = await db.execute(
+        select(AIRecommendation)
+        .where(and_(
+            AIRecommendation.user_id == user_id,
+            func.date(AIRecommendation.created_at) == today
+        ))
+    )
+    existing = result.scalars().first()
+    
+    if not existing:
+        # Generate motivation recommendation
+        await ai_service.generate_recommendation(user_id, "motivation", db)
 
 # -------------------------------
 # Admin Management Routes
