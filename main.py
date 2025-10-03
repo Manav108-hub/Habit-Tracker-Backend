@@ -2,13 +2,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from routes.routes import router
+import os
 
 app = FastAPI(title="Habit Tracker API", version="1.0.0")
+
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://habbit-tracker-eight-mauve.vercel.app/"],  # Add your frontend URLs
+    allow_origins= FRONTEND_URL,  # Add your frontend URLs
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
