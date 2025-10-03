@@ -1,0 +1,27 @@
+# fastapi
+# uvicorn[standard]
+# sqlalchemy[asyncio]
+# aiosqlite  # For SQLite async support
+# asyncpg    # For PostgreSQL (production)
+# alembic
+# python-jose[cryptography]
+# passlib[bcrypt]
+# python-multipart
+# python-dotenv
+# pydantic[email]
+
+fastapi
+uvicorn[standard]
+sqlalchemy[asyncio]
+aiosqlite
+asyncpg
+alembic
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+python-dotenv
+pydantic[email]
+httpx
+psycopg2
+dotenv
+google-genai
